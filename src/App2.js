@@ -4,14 +4,14 @@ import './App.css';
 const URL = 'http://hn.algolia.com/api/v1/';
 const SEARCH = 'search';
 const QUERY = '?query=';
-const DEAFULT_SEARCH = 'developer job';
+const DEAFULT_SEARCH = 'java';
 const PAGE = '&page=';
 
 class App extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
-      result: null,
+      results: null,
       searchTerm: DEAFULT_SEARCH,
       isLoading: false,
       isError: null,
@@ -24,61 +24,81 @@ class App extends React.Component {
     this.setState({ isLoading: false });
   }
 
-  doSearch = (e) => {
+  onSearchSubmit = (e) => {
     e.preventDefault(); // the default event is 'submit'
     const term = document.getElementById('search').value; // TODO: the book used <value> and const {searchTerm} = this.state for fetching the 'term' on P111
-    this.fetchData(term);
+    !this.needfetch(term) ? this.fetchData(term) : this.getFromCache(term);
   };
 
+  needfetch = (term) => {
+    return term in this.state.results;
+  };
+
+  getFromCache = (term) => {
+    this.setState({ searchTerm: term });
+  };
   fetchData = (term, pg = 0) => {
-    // this.setState({ searchTerm: term });
+    console.log(`in fetching... ${term} is searching`);
     fetch(`${URL}${SEARCH}${QUERY}${term}${PAGE}${pg}`)
       .then((response) => {
         if (response.ok) {
+          // console.log(`response is ok.`);
           return response.json();
         } else {
+          console.log(`there are ERRORs.`);
           throw new Error('Something went wrong... Can not get the list.'); // for 404 error
         }
       })
       .then((data) => {
+        // console.log(data);
         this.setSearchTopStories(data, term);
       })
       .catch((error) => this.setState({ isError: error, isLoading: false }));
   };
 
   // pick out this part for pagination to show more listings and still show only 20 initially when do search.
-  setSearchTopStories = (result, term) => {
-    this.setState({ result, searchTerm: term });
-  };
+  setSearchTopStories = (data, term) => {
+    const { hits, page } = data; // before setState, result is not local state result yet.
+    // const { results, searchTerm } = this.state;
+    console.log(
+      `in setSearchTopStories, searchterm is ${term}, page is ${page}`
+    );
 
-  getHitData = (result) => {
-    const oldResultHits = this.state.result ? this.state.result.hits : [];
-    const updatedHits = [...oldResultHits, ...result.hits];
-    return updatedHits;
-  };
-
-  loadNewPage = (pg, list) => {
-    const oldHits = list.hits;
+    // const oldHits = this.getOldHits(page, term);
+    const oldHits =
+      page === 0
+        ? []
+        : (this.state.results &&
+            this.state.results[term] &&
+            this.state.results[term].hits) ||
+          [];
+    console.log(`oldHits are `);
     console.log(oldHits);
-    const newPage = pg + 1;
-    this.fetchData(this.state.searchTerm, newPage);
+    const updatedHits = [...oldHits, ...hits];
+    this.setState({
+      results: { ...this.state.results, [term]: { hits: updatedHits, page } }, // [term] is the variable format, without [] not working
+      searchTerm: term,
+    });
   };
 
-  removeItem = (id) => {
+  removeItem = (id, term) => {
+    const { page } = this.state.results[term];
     // console.log(id);
     // console.log(this.state.result.hits.length); //20
-    const updatedHits = this.state.result.hits.filter(
-      (item) => item.created_at_i !== id
+    const updatedHits = this.state.results[term].hits.filter(
+      (item) => item.objectID !== id
     );
     // console.log(updatedHits.length); //19
     this.setState({
-      result: { ...this.state.result, hits: updatedHits }, // spread operator
+      results: { ...this.state.results, [term]: { hits: updatedHits, page } }, // spread operator
     });
   };
 
   render() {
-    const { result, searchTerm, isLoading, isError } = this.state;
-    // console.log(this.state);
+    const { results, searchTerm, isLoading, isError } = this.state;
+    const page =
+      (results && results[searchTerm] && results[searchTerm].page) || 0;
+
     if (isError) {
       return <p>Error {isError.message}</p>;
     }
@@ -89,58 +109,69 @@ class App extends React.Component {
     return (
       <>
         <div className='main'>
-          <h2>Search Hackers News: </h2>
+          <h2>Search Hacker News: </h2>
           <form>
             <input
               id='search'
               // value={searchTerm}
               // onChange={this.searchChange}
             />
-            <Button onClick={this.doSearch}>Do Search</Button>
+            <Button onClick={this.onSearchSubmit}>Do Search</Button>
           </form>
 
-          {result && (
+          {results && results[searchTerm] && (
             <div>
               <h2>
-                Result of {this.state.searchTerm} has{' '}
-                {this.state.result.hits.length} listings:
+                Result of '{searchTerm}' has {results[searchTerm].hits.length}{' '}
+                listings:
               </h2>
+              <div className='row'>
+                <span className='bold'>Title</span>
+                <span className='bold'>Author</span>
+                <span className='bold'>ID</span>
+                <span></span>
+              </div>
               <Table
-                list={result}
+                term={searchTerm}
+                list={results[searchTerm]}
                 removeItem={this.removeItem}
-                loadNewPage={this.loadNewPage}
               />
             </div>
           )}
+          <div style={{ marginTop: 20 }}>
+            <Button onClick={() => this.fetchData(searchTerm, page + 1)}>
+              More Results
+            </Button>
+          </div>
+
+          <div>
+            <a href=''>Source Code on Github</a>
+          </div>
         </div>
       </>
     );
   }
 }
 
-const Table = ({ list, removeItem, loadNewPage }) => {
-  console.log(list.hits.length);
+const Table = ({ term, list, removeItem }) => {
+  // console.log(list.hits.length);
   return (
     <>
       {list.hits.map((item) => {
         return (
           <div key={item.objectID} className='row'>
-            <span>
+            <span className='title'>
               <a href={item.url}>{item.title}</a>
             </span>
             <span>{item.author} </span>
             <span>{item.objectID}</span>
-            <Button onClick={() => removeItem(item.objectID)}>Dismiss</Button>
+            <Button onClick={() => removeItem(item.objectID, term)}>
+              Dismiss
+            </Button>
           </div>
         );
       })}
-      <Button
-        onClick={() => {
-          loadNewPage(list.page, list);
-        }}
-      >
-        More
-      </Button>
+      <h2>Retrieved {list.page + 1} page from Hacker News</h2>
     </>
   );
 };
@@ -150,8 +181,3 @@ const Button = ({ onClick, children }) => {
 };
 
 export default App;
-
-// listing length is not right
-// add remove all result before search method
-// add objectID in screen to compare what are the same keys
-// when add value, and onChange, the input still not be able to updated.

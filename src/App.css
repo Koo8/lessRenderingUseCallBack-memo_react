@@ -76,10 +76,9 @@ App2.js
  }
 
  .row {
-    display: flex;
-    justify-content:space-between;
-    align-items: center;
-    margin-bottom: 10px;
+    display: grid;
+    grid-template-columns: 3fr 1fr 1fr .5fr;
+    margin: 10px;
  }
 
  button {
@@ -99,4 +98,10 @@ input:focus-visible {
 
  input:target {
      border: solid 1px rgb(195, 32, 78);
+ }
+
+ .bold {
+    font-size: 1.2em;
+    font-weight: bold;
+    color:rgb(35, 63, 163);
  }
